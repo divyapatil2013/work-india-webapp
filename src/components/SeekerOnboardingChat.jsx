@@ -16,47 +16,88 @@ function MessageBubble({ msg }) {
     )
 }
 
-const ONBOARDING_STEPS = [
+function extractDetails(text) {
+    let name = "";
+    let profession = "";
+    let salary = "";
+    let location = "";
+
+    const lines = text.split(/[\n,.]+/).map(s => s.trim()).filter(Boolean);
+    const lower = text.toLowerCase();
+
+    // Try to extract Name
+    const nameMatch = text.match(/(?:my name is|i am|name:?)\s*([a-zA-Z\s]+?)(?:\.|,|$| i am| working| expecting)/i);
+    if (nameMatch && nameMatch[1].trim().length > 1) name = nameMatch[1].trim();
+
+    // Try to extract Profession
+    const profMatch = text.match(/(?:a|an|as|profession:?)\s*([a-zA-Z\s]+?)(?:\.|,|$| earning| expecting| in| from)/i);
+    if (profMatch && !['i', 'my'].includes(profMatch[1].trim().toLowerCase())) profession = profMatch[1].trim();
+
+    // Try to extract Salary
+    const salMatch = text.match(/((?:rs\.?|₹|\$)?\s*\d+(?:,\d+)*(?:k|lakh)?\s*(?:per|-|\/)?\s*(?:month|hr|hour|day)?)/i);
+    if (salMatch) salary = salMatch[1].trim();
+
+    // Try to extract Location
+    const locMatch = text.match(/(?:in|from|at|location:?)\s*([a-zA-Z\s]+?)(?:\.|,|$)/i);
+    if (locMatch && !['month', 'hour', 'rs'].includes(locMatch[1].trim().toLowerCase())) {
+        location = locMatch[1].trim();
+    } else {
+        const cities = ["mumbai", "delhi", "bangalore", "pune", "hyderabad", "chennai", "kolkata", "ahmedabad", "noida", "gurgaon"];
+        const foundCity = cities.find(c => lower.includes(c));
+        if (foundCity) {
+            location = foundCity.charAt(0).toUpperCase() + foundCity.slice(1);
+        } else if (!text.toLowerCase().includes("location")) {
+            location = ""; // leave blank deliberately
+        }
+    }
+
+    // Fallbacks if they just typed comma separated or one line paragraph
+    if (!name && lines.length > 0) name = lines[0].replace(/my name is/i, '').trim();
+    if (!profession && lines.length > 1) profession = lines[1].replace(/i am a/i, '').trim();
+    if (!salary && lines.length > 2) salary = lines[2].trim();
+    if (!location && lines.length > 3) location = lines[3].trim();
+
+    if (!name) name = "Guest";
+    if (!profession) profession = "Professional";
+    if (!salary) salary = "Negotiable";
+
+    return { fullName: name, title: profession, expectedSalary: salary, preferredLocation: location, currentLocation: location };
+}
+
+const GUIDED_STEPS = [
     {
         key: 'fullName',
-        en: "Hi! I'm your Career Assistant AI 🤖\n\nLet's build your profile. What's your full name?",
-        hi: "नमस्ते! मैं आपका करियर असिस्टेंट AI हूँ 🤖\nचलिए आपकी प्रोफ़ाइल बनाते हैं। आपका पूरा नाम क्या है?",
-        placeholder: 'Full name'
+        en: "Please tell your name",
+        hi: "कृपया अपना नाम बताइए / Please tell your name",
+        placeholder: 'e.g. Rahul Kumar'
     },
     {
         key: 'title',
-        en: 'What is your professional title or the type of work you do?',
-        hi: 'आपका प्रोफेशनल टाइटल या आपके काम का प्रकार क्या है?',
-        placeholder: 'e.g. Electrician, Plumber, Data Entry'
-    },
-    {
-        key: 'salaryType',
-        en: 'Do you prefer a monthly salary or hourly pay?',
-        hi: 'क्या आप मासिक वेतन या प्रति घंटा वेतन पसंद करते हैं?',
-        kind: 'salaryType'
+        en: "What is your professional title?",
+        hi: "आपका प्रोफेशनल टाइटल क्या है? / What is your professional title?",
+        placeholder: 'e.g. Electrician, Developer'
     },
     {
         key: 'expectedSalary',
-        en: 'What is your expected salary?',
-        hi: 'आपका अपेक्षित वेतन क्या है?',
-        placeholder: 'e.g. ₹25,000/month or ₹150/hour',
-        kind: 'salary'
-    },
-    {
-        key: 'currentLocation',
-        en: 'Which city are you currently based in?',
-        hi: 'आप अभी किस शहर में रह रहे हैं?',
-        placeholder: 'e.g. Mumbai'
+        en: "What is your expected salary? (Monthly or Hourly)",
+        hi: "आपका अपेक्षित वेतन क्या है? (मासिक या प्रति घंटा) / What is your expected salary? (Monthly or Hourly)",
+        placeholder: 'e.g. ₹20000 Monthly'
     },
     {
         key: 'preferredLocation',
-        en: 'Which city/area do you prefer to work in?',
-        hi: 'आप किस शहर/क्षेत्र में काम करना पसंद करते हैं?',
-        placeholder: 'e.g. Pune, Navi Mumbai'
+        en: "Where is your preferred location?",
+        hi: "आपकी काम करने की पसंदीदा जगह कहाँ है? / Where is your preferred location?",
+        placeholder: 'e.g. Mumbai'
     },
-]
+    {
+        key: 'currentLocation',
+        en: "Where is your current location?",
+        hi: "आपकी वर्तमान जगह कहाँ है? / Where is your current location?",
+        placeholder: 'e.g. Pune'
+    }
+];
 
-// ─── UTILS & BILINGUAL LAYER ───────────────────────────────────────────────────
+// Bilingual Layer
 const isHindiText = (text) => /[\u0900-\u097F]/.test(text)
 
 function formatBilingualSeeker(englishText) {
@@ -77,7 +118,6 @@ function formatBilingualSeeker(englishText) {
     return englishText
 }
 
-// Simple AI response engine for post-onboarding queries
 function generateAIResponse(userText, profile) {
     const lower = userText.toLowerCase()
 
@@ -103,26 +143,22 @@ function generateAIResponse(userText, profile) {
 }
 
 export default function SeekerOnboardingChat({ onProfileReady }) {
-    const steps = useMemo(() => ONBOARDING_STEPS, [])
-
     const [messages, setMessages] = useState([])
-    const [currentIdx, setCurrentIdx] = useState(0)
+    const [modeState, setModeState] = useState('INIT') // INIT, SELECT_MODE, GUIDED, SMART, MISSING_LOCATION, CONFIRM, COMPLETED
+    const [guidedIdx, setGuidedIdx] = useState(0)
     const [input, setInput] = useState('')
     const [saving, setSaving] = useState(false)
-    const [completed, setCompleted] = useState(false)
     const [isTyping, setIsTyping] = useState(false)
     const [minimized, setMinimized] = useState(false)
 
     const [answers, setAnswers] = useState({
         fullName: '',
         title: '',
-        salaryType: 'monthly',
         expectedSalary: '',
-        currentLocation: '',
         preferredLocation: '',
+        currentLocation: '',
     })
 
-    // Language Mode Sync
     const [languageMode, setLanguageMode] = useState(() => localStorage.getItem('chatLanguageMode') || 'english')
 
     useEffect(() => {
@@ -137,41 +173,9 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
 
     const endRef = useRef(null)
 
-    // Load persisted data & handle language mode onboarding swaps
-    useEffect(() => {
-        const stored = localStorage.getItem('seekerProfile')
-        const done = localStorage.getItem('seekerOnboardingCompleted')
-        if (stored && done) {
-            const profile = JSON.parse(stored)
-            setAnswers(profile)
-            setCompleted(true)
-            setCurrentIdx(steps.length)
-
-            const engFree = `Welcome back, ${profile.fullName?.split(' ')[0] || 'there'}! 👋\n\nYour profile is all set. Ask me anything — jobs, salary tips, opportunities, or say "update my info" to refresh your profile.`
-            const welcomeText = languageMode === 'bilingual' ? formatBilingualSeeker(engFree) : engFree
-            setMessages([{ id: 1, role: 'bot', text: welcomeText }])
-            onProfileReady?.(profile, false)
-        } else {
-            // Uncompleted onboarding start
-            const firstStep = steps[0]
-            const welcomeText = languageMode === 'bilingual'
-                ? `${firstStep.hi}\n\n${firstStep.en}`
-                : firstStep.en
-            setMessages([{ id: 1, role: 'bot', text: welcomeText }])
-            setCurrentIdx(0)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [languageMode])
-
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, saving, isTyping])
-
-    const persistProfile = async (payload) => {
-        await new Promise(res => setTimeout(res, 800))
-        localStorage.setItem('seekerProfile', JSON.stringify(payload))
-        localStorage.setItem('seekerOnboardingCompleted', 'true')
-    }
 
     const botReply = useCallback((text, delay = 450) => {
         setIsTyping(true)
@@ -181,51 +185,101 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
         }, delay)
     }, [])
 
-    const finish = async (finalAnswers) => {
-        setSaving(true)
-        setIsTyping(true)
-        try {
-            await persistProfile(finalAnswers)
-        } finally {
-            setSaving(false)
-            setIsTyping(false)
-        }
-        setCompleted(true)
-        onProfileReady?.(finalAnswers, true)
-        const name = finalAnswers.fullName?.split(' ')[0] || 'there'
-        const engSummary = `✅ Profile saved, ${name}!\n\nHere's your summary:\n👤 ${finalAnswers.fullName}\n💼 ${finalAnswers.title}\n💰 ${finalAnswers.expectedSalary} (${finalAnswers.salaryType})\n📍 ${finalAnswers.currentLocation} → ${finalAnswers.preferredLocation}\n\nYour overview is ready below. Feel free to ask me anything anytime — I'm always here! 🚀`
+    const startFlow = useCallback(() => {
+        setMessages([])
+        const enMsg = "Welcome to Create Your Account with AI Assistance! How would you like to provide your details?"
+        const hiMsg = "आपका स्वागत है! आप अपना विवरण कैसे देना चाहेंगे?"
+        botReply(languageMode === 'bilingual' ? `${hiMsg}\n${enMsg}` : enMsg)
+        setModeState('SELECT_MODE')
+    }, [botReply, languageMode])
 
-        botReply(languageMode === 'bilingual' ? formatBilingualSeeker(engSummary) : engSummary, 600)
+    useEffect(() => {
+        const stored = localStorage.getItem('seekerProfile')
+        const done = localStorage.getItem('seekerOnboardingCompleted')
+        if (stored && done) {
+            const profile = JSON.parse(stored)
+            setAnswers(profile)
+            setModeState('COMPLETED')
+            const engFree = `Welcome back, ${profile.fullName?.split(' ')[0] || 'there'}! 👋\n\nYour profile is all set. Ask me anything — jobs, salary tips, opportunities, or say "update my info" to refresh your profile.`
+            const welcomeText = languageMode === 'bilingual' ? formatBilingualSeeker(engFree) : engFree
+            setMessages([{ id: 1, role: 'bot', text: welcomeText }])
+            onProfileReady?.(profile, false)
+        } else {
+            startFlow()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [languageMode])
+
+    const showConfirmation = (data) => {
+        const enSummary = `Name: ${data.fullName}\nProfession: ${data.title}\nSalary: ${data.expectedSalary}\nLocation: ${data.preferredLocation || data.currentLocation}`
+        const enTitle = "Is this correct?\n\n"
+        const hiTitle = "क्या यह सही है? / Is this correct?\n\n"
+        botReply((languageMode === 'bilingual' ? hiTitle : enTitle) + enSummary, 500)
     }
 
-    const advanceOnboarding = async (userText) => {
-        const step = steps[currentIdx]
-        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: userText }])
-
-        let updatedAnswers = { ...answers }
-        if (step.kind === 'salaryType') {
-            updatedAnswers.salaryType = userText.toLowerCase().includes('hour') ? 'hourly' : 'monthly'
-        } else {
-            updatedAnswers[step.key] = userText
-        }
-        setAnswers(updatedAnswers)
-
-        const nextIdx = currentIdx + 1
-        if (nextIdx >= steps.length) {
-            await finish(updatedAnswers)
+    const advanceGuided = (userText) => {
+        let updated = { ...answers, [GUIDED_STEPS[guidedIdx].key]: userText }
+        setAnswers(updated)
+        const nextIdx = guidedIdx + 1
+        if (nextIdx >= GUIDED_STEPS.length) {
+            setModeState('CONFIRM')
+            showConfirmation(updated)
             return
         }
+        setGuidedIdx(nextIdx)
+        const nextStep = GUIDED_STEPS[nextIdx]
+        botReply(languageMode === 'bilingual' ? nextStep.hi : nextStep.en)
+    }
 
-        setCurrentIdx(nextIdx)
-        const nextStep = steps[nextIdx]
-        const nextQuest = languageMode === 'bilingual'
-            ? `${nextStep.hi}\n\n${nextStep.en}`
-            : nextStep.en
-        botReply(nextQuest)
+    const processSmartInput = (text) => {
+        const extracted = extractDetails(text)
+        setAnswers(extracted)
+        if (!extracted.preferredLocation && !extracted.currentLocation) {
+            setModeState('MISSING_LOCATION')
+            const enMsg = "You have not provided your location.\nPlease tell your preferred location."
+            const hiMsg = "आपने अपना स्थान नहीं बताया है।\nकृपया अपना पसंदीदा स्थान बताएं।"
+            botReply(languageMode === 'bilingual' ? `${hiMsg}\n\n${enMsg}` : enMsg)
+        } else {
+            setModeState('CONFIRM')
+            showConfirmation(extracted)
+        }
+    }
+
+    const confirmAccount = async (isYes) => {
+        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: isYes ? 'YES' : 'NO' }])
+
+        if (isYes) {
+            setSaving(true)
+            setIsTyping(true)
+            await new Promise(r => setTimeout(r, 800))
+            localStorage.setItem('seekerProfile', JSON.stringify(answers))
+            localStorage.setItem('seekerOnboardingCompleted', 'true')
+            setSaving(false)
+            setIsTyping(false)
+            setModeState('COMPLETED')
+            onProfileReady?.(answers, true)
+
+            const name = answers.fullName?.split(' ')[0] || 'there'
+            const engSummary = `✅ Profile saved, ${name}!\n\nHere's your summary:\n👤 ${answers.fullName}\n💼 ${answers.title}\n💰 ${answers.expectedSalary}\n📍 ${answers.preferredLocation || answers.currentLocation}\n\nYour overview is ready below. Feel free to ask me anything anytime — I'm always here! 🚀`
+
+            botReply(languageMode === 'bilingual' ? formatBilingualSeeker(engSummary) : engSummary, 600)
+        } else {
+            setAnswers({ fullName: '', title: '', expectedSalary: '', preferredLocation: '', currentLocation: '' })
+            setGuidedIdx(0)
+            const hiRestart = "आइए फिर से कोशिश करते हैं। / Let's try again."
+            const enRestart = "Let's try again."
+            botReply(languageMode === 'bilingual' ? hiRestart : enRestart)
+
+            setTimeout(() => {
+                const enMsg = "How would you like to provide your details?"
+                const hiMsg = "आप अपना विवरण कैसे देना चाहेंगे?"
+                botReply(languageMode === 'bilingual' ? `${hiMsg}\n${enMsg}` : enMsg)
+                setModeState('SELECT_MODE')
+            }, 800)
+        }
     }
 
     const handleFreeChat = (userText) => {
-        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: userText }])
         const englishResponse = generateAIResponse(userText, answers)
         const finalResponse = languageMode === 'bilingual' ? formatBilingualSeeker(englishResponse) : englishResponse
         botReply(finalResponse, 700)
@@ -233,47 +287,47 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        if (saving || isTyping) return
-        const step = steps[currentIdx]
+        if (saving || isTyping || !input.trim()) return
         const text = input.trim()
-        if (!text) return
 
-        if (!completed && languageMode === 'english' && step?.kind === 'salaryType') return
-
-        if (languageMode === 'english' && isHindiText(text)) {
-            setMessages(prev => [...prev, { id: Date.now(), role: 'bot', text: '⚠ Please enable Upgrade to chat in Hindi.', time: new Date().toLocaleTimeString() }])
+        if (languageMode === 'english' && isHindiText(text) && modeState === 'COMPLETED') {
+            setMessages(prev => [...prev, { id: Date.now(), role: 'bot', text: '⚠ Please enable Upgrade to chat in Hindi.' }])
             setInput('')
             return
         }
 
         setInput('')
 
-        if (completed) {
+        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text }])
+
+        if (modeState === 'COMPLETED') {
             handleFreeChat(text)
-        } else {
-            await advanceOnboarding(text)
+        } else if (modeState === 'GUIDED') {
+            advanceGuided(text)
+        } else if (modeState === 'SMART') {
+            processSmartInput(text)
+        } else if (modeState === 'MISSING_LOCATION') {
+            const updated = { ...answers, preferredLocation: text, currentLocation: text }
+            setAnswers(updated)
+            setModeState('CONFIRM')
+            showConfirmation(updated)
         }
     }
 
     const startOver = () => {
-        setCompleted(false)
-        setCurrentIdx(0)
-        setAnswers({ fullName: '', title: '', salaryType: 'monthly', expectedSalary: '', currentLocation: '', preferredLocation: '' })
-
-        const firstStep = steps[0]
-        const prefix = languageMode === 'bilingual'
-            ? "ज़रूर! चलिए आपकी प्रोफ़ाइल अपडेट करते हैं। 📝"
-            : "Sure! Let's update your profile. 📝"
-
-        const quest = languageMode === 'bilingual'
-            ? `${firstStep.hi}\n\n${firstStep.en}`
-            : firstStep.en
-
-        setMessages([{ id: Date.now(), role: 'bot', text: `${prefix}\n\n${quest}` }])
+        setCompletedModeFromUI()
     }
 
-    const showSalaryButtons = !completed && steps[currentIdx]?.kind === 'salaryType'
-    const inputDisabled = saving || isTyping || (!completed && showSalaryButtons)
+    const setCompletedModeFromUI = () => {
+        setModeState('SELECT_MODE')
+        setAnswers({ fullName: '', title: '', expectedSalary: '', preferredLocation: '', currentLocation: '' })
+        const prefix = languageMode === 'bilingual' ? "ज़रूर! चलिए आपकी प्रोफ़ाइल अपडेट करते हैं। 📝" : "Sure! Let's update your profile. 📝"
+        const enMsg = "How would you like to provide your details?"
+        const hiMsg = "आप अपना विवरण कैसे देना चाहेंगे?"
+        const ask = languageMode === 'bilingual' ? `${hiMsg}\n${enMsg}` : enMsg
+
+        setMessages([{ id: Date.now(), role: 'bot', text: `${prefix}\n\n${ask}` }])
+    }
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -282,14 +336,14 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-xl">🤖</div>
                     <div>
-                        <p className="font-bold text-base leading-tight">Career Assistant AI</p>
+                        <p className="font-bold text-base leading-tight">Create Your Account with AI Assistance</p>
                         <p className="text-primary-100 text-xs">
-                            {completed ? '✦ Profile complete · Ask me anything' : `Step ${Math.min(currentIdx + 1, steps.length)} of ${steps.length}`}
+                            {modeState === 'COMPLETED' ? '✦ Profile complete · Ask me anything' : 'Account Setup'}
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {completed && (
+                    {modeState === 'COMPLETED' && (
                         <button
                             onClick={startOver}
                             className="text-xs bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors"
@@ -327,27 +381,56 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
                     </div>
 
                     {/* Input area */}
-                    {showSalaryButtons ? (
+                    {modeState === 'SELECT_MODE' ? (
                         <div className="p-4 bg-white border-t border-gray-100">
-                            <p className="text-xs text-gray-400 mb-2 font-medium">
-                                {languageMode === 'bilingual' ? 'अपना पसंदीदा वेतन प्रकार चुनें:' : 'Choose your preferred pay type:'}
-                            </p>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => advanceOnboarding('Monthly')}
-                                    disabled={saving}
+                                    onClick={() => {
+                                        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: 'Guided Mode' }])
+                                        setModeState('GUIDED')
+                                        setGuidedIdx(0)
+                                        botReply(languageMode === 'bilingual' ? GUIDED_STEPS[0].hi : GUIDED_STEPS[0].en)
+                                    }}
+                                    disabled={saving || isTyping}
                                     className="flex-1 btn-secondary py-2"
                                 >
-                                    {languageMode === 'bilingual' ? '📅 मासिक / Monthly' : '📅 Monthly'}
+                                    {languageMode === 'bilingual' ? 'गाइडेड मोड / Guided' : 'Guided Mode'}
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => advanceOnboarding('Hourly')}
-                                    disabled={saving}
+                                    onClick={() => {
+                                        setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: 'Smart Input Mode' }])
+                                        setModeState('SMART')
+                                        botReply(languageMode === 'bilingual'
+                                            ? 'कृपया एक पैराग्राफ में अपना नाम, पेशा, अपेक्षित वेतन और स्थान दें। / Please provide your Name, Profession, Expected Salary, and Location in a single paragraph.'
+                                            : 'Please provide your Name, Profession, Expected Salary, and Location in a single paragraph.')
+                                    }}
+                                    disabled={saving || isTyping}
                                     className="flex-1 btn-secondary py-2"
                                 >
-                                    {languageMode === 'bilingual' ? '⏱ प्रति घंटा / Hourly' : '⏱ Hourly'}
+                                    {languageMode === 'bilingual' ? 'स्मार्ट मोड / Smart' : 'Smart Input Mode'}
+                                </button>
+                            </div>
+                        </div>
+                    ) : modeState === 'CONFIRM' ? (
+                        <div className="p-4 bg-white border-t border-gray-100">
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => confirmAccount(true)}
+                                    disabled={saving || isTyping}
+                                    className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-xl"
+                                >
+                                    YES
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => confirmAccount(false)}
+                                    disabled={saving || isTyping}
+                                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 rounded-xl"
+                                >
+                                    NO
                                 </button>
                             </div>
                         </div>
@@ -358,15 +441,17 @@ export default function SeekerOnboardingChat({ onProfileReady }) {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder={
-                                    completed
+                                    modeState === 'COMPLETED'
                                         ? (languageMode === 'bilingual' ? 'नौकरियों, वेतन, सुझावों के बारे में पूछें… / Ask me about jobs...' : 'Ask me about jobs, salary, tips…')
-                                        : (steps[currentIdx]?.placeholder || 'Type here…')
+                                        : modeState === 'GUIDED'
+                                            ? (GUIDED_STEPS[guidedIdx]?.placeholder || 'Type here…')
+                                            : 'Type here...'
                                 }
                                 className="flex-1 input-field py-2"
                                 autoFocus
-                                disabled={inputDisabled}
+                                disabled={saving || isTyping}
                             />
-                            <button type="submit" className="btn-primary px-5 py-2" disabled={inputDisabled || !input.trim()}>
+                            <button type="submit" className="btn-primary px-5 py-2" disabled={saving || isTyping || !input.trim()}>
                                 {saving ? '…' : '↑'}
                             </button>
                         </form>

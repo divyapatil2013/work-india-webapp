@@ -46,7 +46,7 @@ export default function DashboardHome() {
             {/* Welcome header */}
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                    {onboardingDone ? 'Career Assistant AI' : `Welcome, ${userName.split(' ')[0]}! 👋`}
+                    {onboardingDone ? 'Create Your Account with AI Assistance' : `Welcome, ${userName.split(' ')[0]}! 👋`}
                 </h2>
                 <p className="text-gray-500 text-sm mt-1">
                     {onboardingDone
@@ -59,7 +59,7 @@ export default function DashboardHome() {
             {!onboardingDone && (
                 <div className="flex items-center gap-3 p-4 bg-primary-50 border border-primary-100 rounded-2xl">
                     <div className="flex items-center gap-2 flex-1">
-                        {['AI Assistant', 'Overview'].map((step, i) => (
+                        {['Create Your Account', 'Overview'].map((step, i) => (
                             <div key={step} className="flex items-center gap-2">
                                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${i === 0 ? 'bg-primary-600 text-white shadow-md' : 'bg-gray-200 text-gray-400'}`}>
                                     {i + 1}

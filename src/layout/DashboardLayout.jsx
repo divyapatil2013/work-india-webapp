@@ -46,7 +46,7 @@ export default function DashboardLayout() {
             { path: '/dashboard', label: 'Overview', icon: '🏠', exact: true },
         ] : [
             // Job seeker: AI Assistant first, Overview only after onboarding
-            { path: '/dashboard', label: 'AI Assistant', icon: '🤖', exact: true },
+            { path: '/dashboard', label: 'Create Your Account', icon: '🤖', exact: true },
             ...(onboardingDone ? [
                 { path: '/dashboard/overview', label: 'Overview', icon: '🏠' },
             ] : []),
